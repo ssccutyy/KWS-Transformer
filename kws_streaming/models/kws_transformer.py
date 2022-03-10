@@ -23,6 +23,9 @@ from kws_streaming.models import utils
 
 from kws_streaming.models.transformer_utils import KWSTransformer
 
+from kws_streaming.models.star_transformer_utils import STARTransformer
+
+
 import tensorflow_addons as tfa
 
 from tensorflow.keras.layers import (
@@ -180,6 +183,11 @@ def model(flags):
     net = Permute((2, 1))(net)
     freq_sig = freq_transformer(net, training=flags.training)
 
+  if flags.attention_type == 'patch':
+    star_transformer = STARTransformer()
+    star_sig = star_transformer(net, training=flags.training)
+
+
   mlp_heads = [ tf.keras.Sequential(
       [
           Dense(flags.label_count, kernel_initializer=TruncatedNormal(mean=0., stddev=TRUNC_STD), bias_initializer=Zeros()),
@@ -194,6 +202,8 @@ def model(flags):
     net = Concatenate(axis=-1)([time_sig, freq_sig])
   elif flags.attention_type == 'patch':
     net = patch_sig
+  elif flags.attention_type == 'star':
+    net = star_sig
   else:
     raise ValueError('Unsupported attention type:%s' % flags.attention_type)
 
