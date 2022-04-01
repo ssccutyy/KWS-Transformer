@@ -183,9 +183,9 @@ def model(flags):
     net = Permute((2, 1))(net)
     freq_sig = freq_transformer(net, training=flags.training)
 
-  if flags.attention_type == 'patch':
+  if flags.attention_type == 'star':
     star_transformer = STARTransformer()
-    star_sig = star_transformer(net, training=flags.training)
+    star_sig = star_transformer(net)
 
 
   mlp_heads = [ tf.keras.Sequential(

@@ -14,6 +14,7 @@
 
 # Vision transformer implementation based on https://github.com/tuvovan/Vision_Transformer_Keras/blob/master/vit.py
 
+import numpy as NP
 import tensorflow as tf
 import tensorflow_addons as tfa
 from tensorflow.keras.layers import (
@@ -192,3 +193,23 @@ class KWSTransformer(tf.keras.Model):
             return class_output, distill_output
         else:
             return class_output
+
+
+if __name__ == '__main__':
+    print("a")
+    net = tf.constant(NP.array(range(3920)).reshape(1, 98, 40), dtype='float32')
+
+    time_transformer = KWSTransformer(num_layers=1,
+        num_classes=12,
+        d_model=192,
+        num_heads=3,
+        mlp_dim=768,
+        dropout=0.0,
+        num_patches=98,
+        prenorm=True,
+        distill_token=False,
+        approximate_gelu=False,
+        )
+
+    time_sig = time_transformer(net, training=1)
+    print("b")
