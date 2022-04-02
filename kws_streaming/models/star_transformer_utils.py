@@ -35,6 +35,7 @@ class StarTransformer(tf.keras.Model):
         """
         super(StarTransformer, self).__init__()
         self.iters = num_layers
+        self.hidden_size = hidden_size
 
         self.norm = [LayerNormalization(epsilon=1e-6) for _ in range(self.iters)]
         self.emb_drop = Dropout(dropout)
@@ -83,7 +84,7 @@ class StarTransformer(tf.keras.Model):
         embs = tf.transpose(embs,[0,2,3,1])# x: (B,L,1,H)
         embs = self.fc(embs)
         embs = tf.transpose(embs, [0, 3, 1, 2])
-
+        hidden_size = self.hidden_size
         nodes = embs
         relay = tf.reduce_mean(embs,2,keepdims=True)
         #ex_mask = mask[:, None, :, None].expand(B, H, L, 1)
