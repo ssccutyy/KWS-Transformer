@@ -119,7 +119,6 @@ class TransformerBlock(tf.keras.layers.Layer):
             output = self.layernorm2(out1 + ffn_output)
         return output, weights
 
-
 class KWSTransformer(tf.keras.Model):
     def __init__(
         self,
@@ -187,17 +186,17 @@ class KWSTransformer(tf.keras.Model):
             x, _ = layer(x, training)
 
         # First (class token) is used for classification, second for distillation (if enabled)
-        class_output = x[:, 0]
+        class_output = x[:, 0] #取出第一列（即class_token_embedding）（B,hidden_size）
         if self.distill_emb is not None:
-            distill_output = x[:, 1]
-            return class_output, distill_output
+            distill_output = x[:, 1] #取出第二列(即distill_token_embedding) (B,hidden_size)
+            return class_output, distill_output  #tuple
         else:
             return class_output
 
 
 if __name__ == '__main__':
     print("a")
-    net = tf.constant(NP.array(range(3920)).reshape(1, 98, 40), dtype='float32')
+    net = tf.constant(NP.array(range(7840)).reshape(2, 98, 40), dtype='float32')
 
     time_transformer = KWSTransformer(num_layers=1,
         num_classes=12,

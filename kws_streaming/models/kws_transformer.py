@@ -184,8 +184,13 @@ def model(flags):
     freq_sig = freq_transformer(net, training=flags.training)
 
   if flags.attention_type == 'star':
-    star_transformer = STARTransformer()
-    star_sig = star_transformer(net)
+    star_transformer = STARTransformer(hidden_size=flags.d_model,
+        num_layers=flags.num_layers,
+        num_head=flags.heads,
+        head_dim=flags.head_dim,
+        dropout=flags.dropout1,
+        )
+    star_sig = star_transformer(net, training=flags.training)
 
 
   mlp_heads = [ tf.keras.Sequential(
