@@ -23,7 +23,7 @@ from kws_streaming.models import utils
 
 from kws_streaming.models.transformer_utils import KWSTransformer
 
-from kws_streaming.models.star_transformer_utils import STARTransformer
+from kws_streaming.models.star_transformer_utils import StarTransformer
 
 
 import tensorflow_addons as tfa
@@ -184,7 +184,7 @@ def model(flags):
     freq_sig = freq_transformer(net, training=flags.training)
 
   if flags.attention_type == 'star':
-    star_transformer = STARTransformer(hidden_size=flags.d_model,
+    star_transformer = StarTransformer(hidden_size=flags.d_model,
         num_layers=flags.num_layers,
         num_head=flags.heads,
         head_dim=flags.head_dim,
