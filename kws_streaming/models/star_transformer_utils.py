@@ -97,9 +97,9 @@ class StarTransformer(tf.keras.Model):
         nodes = tf.transpose(tf.reshape(nodes,[B, hidden_size, L]),[0, 2, 1])
         relay = tf.reshape(relay,[B, hidden_size])
 
-        y = 0.5 * (relay + tf.reduce_max(nodes,1))
+        #y = 0.5 * (relay + tf.reduce_max(nodes,1))
         #output = self.ffn(y)  # [bsz, n_cls]
-        return y
+        return relay
 
 class _MSA1(tf.keras.layers.Layer):
     def __init__(self, nhid, nhead=10, head_dim=10, dropout=0.1):
