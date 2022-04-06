@@ -88,18 +88,19 @@ class StarTransformer(tf.keras.Model):
         nodes = embs
         relay = tf.reduce_mean(embs,2,keepdims=True)
         #ex_mask = mask[:, None, :, None].expand(B, H, L, 1)
-        r_embs = tf.reshape(embs,[B, hidden_size, 1, L])
+        #r_embs = tf.reshape(embs,[B, hidden_size, 1, L])
         for i in range(self.iters):
-            ax = tf.concat([r_embs, tf.tile(relay, (1, 1, 1, L))], 2)
+            #ax = tf.concat([r_embs, tf.tile(relay, (1, 1, 1, L))], 2)
+            ax = tf.tile(relay,(1,1,1,L))
             nodes = tf.nn.leaky_relu(self.ring_att[i](norm_func(self.norm[i], nodes), ax=ax))
             relay = tf.nn.leaky_relu(self.star_att[i](relay, tf.concat([relay, nodes], 2)))
             #nodes = nodes.masked_fill_(ex_mask, 0)
         nodes = tf.transpose(tf.reshape(nodes,[B, hidden_size, L]),[0, 2, 1])
         relay = tf.reshape(relay,[B, hidden_size])
 
-        #y = 0.5 * (relay + tf.reduce_max(nodes,1))
+        y = 0.5 * (relay + tf.reduce_max(nodes,1))
         #output = self.ffn(y)  # [bsz, n_cls]
-        return relay
+        return y
 
 class _MSA1(tf.keras.layers.Layer):
     def __init__(self, nhid, nhead=10, head_dim=10, dropout=0.1):
