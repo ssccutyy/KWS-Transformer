@@ -39,10 +39,10 @@ class StarTransformer(tf.keras.Model):
 
         self.norm = [LayerNormalization(epsilon=1e-6) for _ in range(self.iters)]
         self.emb_drop = Dropout(dropout)
-        self.ring_att = [_MSA1(hidden_size, nhead=num_head, head_dim=head_dim, dropout=0.0)
-             for _ in range(self.iters)]
-        self.star_att = [_MSA2(hidden_size, nhead=num_head, head_dim=head_dim, dropout=0.0)
-             for _ in range(self.iters)]
+        # self.ring_att = [_MSA1(hidden_size, nhead=num_head, head_dim=head_dim, dropout=0.0)
+        #      for _ in range(self.iters)]
+        # self.star_att = [_MSA2(hidden_size, nhead=num_head, head_dim=head_dim, dropout=0.0)
+        #      for _ in range(self.iters)]
         # self.patch_proj = Dense(hidden_size, kernel_initializer=TruncatedNormal(mean=0., stddev=TRUNC_STD),
         #                         bias_initializer=Zeros(), input_shape=(98, 40,))
 
@@ -58,6 +58,10 @@ class StarTransformer(tf.keras.Model):
         #     ]
         # )
         self.fc = tf.keras.layers.Conv2D(hidden_size, 1)
+        self.enc_layers = [
+            star_TransformerBlock(hidden_size, num_layers, num_head, head_dim)
+            for _ in range(num_layers)
+        ]
         #self.fc = Dense(hidden_size, kernel_initializer=TruncatedNormal(mean=0., stddev=TRUNC_STD), use_bias=False)
     def call(self, data, training=1):
         r"""
@@ -88,13 +92,16 @@ class StarTransformer(tf.keras.Model):
         nodes = embs
         relay = tf.reduce_mean(embs,2,keepdims=True)
         #ex_mask = mask[:, None, :, None].expand(B, H, L, 1)
-        #r_embs = tf.reshape(embs,[B, hidden_size, 1, L])
-        for i in range(self.iters):
-            #ax = tf.concat([r_embs, tf.tile(relay, (1, 1, 1, L))], 2)
-            ax = tf.tile(relay,(1,1,1,L))
-            nodes = tf.nn.leaky_relu(self.ring_att[i](norm_func(self.norm[i], nodes), ax=ax))
-            relay = tf.nn.leaky_relu(self.star_att[i](relay, tf.concat([relay, nodes], 2)))
-            #nodes = nodes.masked_fill_(ex_mask, 0)
+        #r_embs = tf.reshape(embs,[B, hidden_size, 1, L]) #进入star-Transformer前token的embedding，原论文中nodes的更新得与这个做attention
+        # for i in range(self.iters):
+        #     #ax = tf.concat([r_embs, tf.tile(relay, (1, 1, 1, L))], 2)
+        #     ax = tf.tile(relay,(1,1,1,L))
+        #     nodes = tf.nn.leaky_relu(self.ring_att[i](norm_func(self.norm[i], nodes), ax=ax))
+        #     relay = tf.nn.leaky_relu(self.star_att[i](relay, tf.concat([relay, nodes], 2)))
+        #     #nodes = nodes.masked_fill_(ex_mask, 0)
+        for i, layer in enumerate(self.enc_layers):
+            nodes = norm_func(self.norm[i], nodes)
+            nodes, relay = layer(nodes, relay, training)
         nodes = tf.transpose(tf.reshape(nodes,[B, hidden_size, L]),[0, 2, 1])
         relay = tf.reshape(relay,[B, hidden_size])
 
@@ -201,6 +208,111 @@ class _MSA2(tf.keras.layers.Layer):
         ret = self.WO(att)
         ret = tf.transpose(ret, [0, 3, 1, 2])
         return ret
+
+class _MSA3(tf.keras.layers.Layer):
+    def __init__(self, nhid, nhead=10, head_dim=10, dropout=0.1):
+        super(_MSA3, self).__init__()
+        # Multi-head Self Attention Case 1, doing self-attention for small regions
+        # Due to the architecture of GPU, using hadamard production and summation are faster than dot production when unfold_size is very small
+
+        self.WO = tf.keras.layers.Conv2D(nhid, 1)
+
+        self.drop = Dropout(dropout)
+
+        # print('NUM_HEAD', nhead, 'DIM_HEAD', head_dim)
+        self.nhid, self.nhead, self.head_dim, self.unfold_size = nhid, nhead, head_dim, 3
+
+    def call(self, q, k, v, ax_k=None, ax_v=None, training=1):
+        # x: B, H, L, 1, ax : B, H, X, L append features
+        nhid, nhead, head_dim, unfold_size = self.nhid, self.nhead, self.head_dim, self.unfold_size
+        B, H, L, _ = k.shape
+        aL = ax_k.shape[2]
+        ax_k = tf.tile(ax_k, (1, 1, 1, L))
+        ax_v = tf.tile(ax_v, (1, 1, 1, L))
+        ak = tf.reshape(ax_k, [B, nhead, head_dim, aL, L])
+        av = tf.reshape(ax_v, [B, nhead, head_dim, aL, L])
+
+        q = tf.reshape(q,[B, nhead, head_dim, 1, L])
+        k_unfold = tf.image.extract_patches(images=k, sizes=[1, 1, 3, 1], strides=[1, 1, 1, 1], rates=[1, 1, 1, 1],
+                                                 padding='SAME')
+        k1 = tf.transpose(k_unfold, [0, 1, 3, 2])
+        k = tf.reshape(k1, [B, nhead, head_dim, unfold_size, L])
+        v_unfold = tf.image.extract_patches(images=v, sizes=[1, 1, 3, 1], strides=[1, 1, 1, 1], rates=[1, 1, 1, 1],
+                                                 padding='SAME')
+        v1 = tf.transpose(v_unfold, [0, 1, 3, 2])
+        v = tf.reshape(v1, [B, nhead, head_dim, unfold_size, L])
+
+        if ax_k is not None:
+            k = tf.concat([k, ak], 3)
+            v = tf.concat([v, av], 3)
+
+        alphas = self.drop(tf.nn.softmax(tf.reduce_sum(q * k, 2, keepdims=True) / NP.sqrt(head_dim), 3), training=training)  # B N L 1 U
+        att = tf.reshape(tf.reduce_sum(alphas * v, 3), [B, nhead * head_dim, L, 1])
+
+        att = tf.transpose(att, [0, 2, 3, 1])
+        ret = self.WO(att)
+        ret = tf.transpose(ret, [0, 3, 1, 2])
+
+        return ret
+
+class _MSA4(tf.keras.layers.Layer):
+    def __init__(self, nhid, nhead=10, head_dim=10, dropout=0.1):
+        # Multi-head Self Attention Case 2, a broadcastable query for a sequence key and value
+        super(_MSA4, self).__init__()
+        self.WO = tf.keras.layers.Conv2D(nhid, 1)
+        self.drop = Dropout(dropout)
+        # print('NUM_HEAD', nhead, 'DIM_HEAD', head_dim)
+        self.nhid, self.nhead, self.head_dim, self.unfold_size = nhid, nhead, head_dim, 3
+
+    def call(self, q, k, v, mask=None, training=1):
+        # x: B H 1 1  relay
+        # y: B H L 1  nodes
+        nhid, nhead, head_dim, unfold_size = self.nhid, self.nhead, self.head_dim, self.unfold_size
+        B, H, L, _ = k.shape
+
+        q = tf.reshape(q,[B, nhead, 1, head_dim])  # B, H, 1, 1 -> B, N, 1, h
+        k = tf.reshape(k,[B, nhead, head_dim, L])  # B, H, L, 1 -> B, N, h, L
+        v = tf.transpose(tf.reshape(v,[B, nhead, head_dim, L]),[0, 1, 3, 2])# B, H, L, 1 -> B, N, L, h
+        pre_a = tf.matmul(q, k) / NP.sqrt(head_dim)
+        if mask is not None:
+            pre_a = pre_a.masked_fill(mask[:, None, None, :], -float('inf'))
+        alphas = self.drop(tf.nn.softmax(pre_a, 3), training=training)  # B, N, 1, L
+        att = tf.reshape(tf.matmul(alphas, v),[B, -1, 1, 1])  # B, N, 1, h -> B, N*h, 1, 1
+
+        att = tf.transpose(att, [0, 2, 3, 1])
+        ret = self.WO(att)
+        ret = tf.transpose(ret, [0, 3, 1, 2])
+        return ret
+
+class star_TransformerBlock(tf.keras.layers.Layer):
+    def __init__(self, hidden_size, num_layers, num_head, head_dim, dropout=0.1):
+        super(star_TransformerBlock, self).__init__()
+        self.ring_att = _MSA3(hidden_size, nhead=num_head, head_dim=head_dim, dropout=0.0)
+        self.star_att = _MSA4(hidden_size, nhead=num_head, head_dim=head_dim, dropout=0.0)
+        self.WQ = tf.keras.layers.Conv2D(num_head * head_dim, 1)
+        self.WK = tf.keras.layers.Conv2D(num_head * head_dim, 1)
+        self.WV = tf.keras.layers.Conv2D(num_head * head_dim, 1)
+        self.hidden_size, self.num_head, self.head_dim, self.unfold_size = hidden_size, num_head, head_dim, 3
+
+    def call(self, x, y, training=1):
+        B, H, L, _ = x.shape #x是nodes，y是relay
+        x_y = tf.concat([x,y],2)
+        x_y = tf.transpose(x_y, [0, 2, 3, 1])
+        q, k, v = self.WQ(x_y), self.WK(x_y), self.WV(x_y)
+        q = tf.transpose(q, [0, 3, 1, 2])# q:(B,H,1,1)
+        k = tf.transpose(k, [0, 3, 1, 2])
+        v = tf.transpose(v, [0, 3, 1, 2])# k,v: (B,H,L,1)
+
+        q_relay = tf.expand_dims(q[:, :, -1, :],3)
+        k_relay = tf.expand_dims(k[:, :, -1, :],3)
+        v_relay = tf.expand_dims(v[:, :, -1, :],3)
+        q_nodes = q[:, :, 0:-1, :]
+        k_nodes = k[:, :, 0:-1, :]
+        v_nodes = v[:, :, 0:-1, :]
+        nodes = tf.nn.leaky_relu(self.ring_att(q_nodes, k_nodes, v_nodes, ax_k=k_relay, ax_v=v_relay))
+        relay = tf.nn.leaky_relu(self.star_att(q_relay, tf.concat([k_nodes, k_relay], 2), tf.concat([v_nodes, v_relay], 2)))
+        return nodes, relay
+
 
 if __name__ == '__main__':
     print('a')
