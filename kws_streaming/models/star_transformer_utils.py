@@ -21,7 +21,7 @@ class StarTransformer(tf.keras.Model):
     paper: https://arxiv.org/abs/1902.09113
     """
 
-    def __init__(self, hidden_size, num_layers, num_patches, num_head, head_dim, dropout=0.1, max_len=None):
+    def __init__(self, hidden_size, mlp_dim, num_layers, num_patches, num_head, head_dim, dropout=0.1, max_len=None):
         r"""
 
         :param int hidden_size: 输入维度的大小。同时也是输出维度的大小。
@@ -39,9 +39,9 @@ class StarTransformer(tf.keras.Model):
 
         self.norm = [LayerNormalization(epsilon=1e-6) for _ in range(self.iters)]
         self.emb_drop = Dropout(dropout)
-        self.ring_att = [_MSA1(hidden_size, nhead=num_head, head_dim=head_dim, dropout=0.0)
+        self.ring_att = [_MSA1(hidden_size, mlp_dim=mlp_dim, nhead=num_head, head_dim=head_dim, dropout=0.0)
              for _ in range(self.iters)]
-        self.star_att = [_MSA2(hidden_size, nhead=num_head, head_dim=head_dim, dropout=0.0)
+        self.star_att = [_MSA2(hidden_size, mlp_dim=mlp_dim, nhead=num_head, head_dim=head_dim, dropout=0.0)
              for _ in range(self.iters)]
         # self.patch_proj = Dense(hidden_size, kernel_initializer=TruncatedNormal(mean=0., stddev=TRUNC_STD),
         #                         bias_initializer=Zeros(), input_shape=(98, 40,))
@@ -73,17 +73,17 @@ class StarTransformer(tf.keras.Model):
             # B, H, L, 1
             return tf.transpose(f(tf.transpose(x,[0,2,3,1]), training=training),[0,3,1,2])
 
-        B, L, H = [data.shape[i] for i in range(3)] #_, num_time_windows, num_freqs = net.shape
+        B, L, H = [data.shape[i] for i in range(3)] #_, num_time_windows, num_freqs = net.shape(512,98,40)
         #mask = (mask.eq(False))  # flip the mask for masked_fill_
         #smask = tf.concat([tf.zeros([B, 1],tf.uint8).to(mask), mask], 1)
-        embs = tf.transpose(data,[0,2,1])[:, :, :, None]
+        embs = tf.transpose(data,[0,2,1])[:, :, :, None]#(512,40,98,1)
 
         #embs = embs + self.pos_emb
         embs = norm_func(self.emb_drop, embs)
 
-        embs = tf.transpose(embs,[0,2,3,1])# x: (B,L,1,H)
+        embs = tf.transpose(embs,[0,2,3,1])# x: (B,L,1,H)(512,98,1,40)
         embs = self.fc(embs)
-        embs = tf.transpose(embs, [0, 3, 1, 2])
+        embs = tf.transpose(embs, [0, 3, 1, 2])#(512,192,98,1)
         hidden_size = self.hidden_size
         embs = embs + self.pos_emb
         nodes = embs
@@ -104,7 +104,7 @@ class StarTransformer(tf.keras.Model):
         return y
 
 class _MSA1(tf.keras.layers.Layer):
-    def __init__(self, nhid, nhead=10, head_dim=10, dropout=0.1):
+    def __init__(self, nhid, mlp_dim, nhead=10, head_dim=10, dropout=0.1):
         super(_MSA1, self).__init__()
         # Multi-head Self Attention Case 1, doing self-attention for small regions
         # Due to the architecture of GPU, using hadamard production and summation are faster than dot production when unfold_size is very small
@@ -112,7 +112,15 @@ class _MSA1(tf.keras.layers.Layer):
         self.WQ = tf.keras.layers.Conv2D(nhead * head_dim, 1)
         self.WK = tf.keras.layers.Conv2D(nhead * head_dim, 1)
         self.WV = tf.keras.layers.Conv2D(nhead * head_dim, 1)
-        self.WO = tf.keras.layers.Conv2D(nhid, 1)
+        #self.WO = tf.keras.layers.Conv2D(nhid, 1)
+        self.WO = tf.keras.Sequential(
+            [
+                Dense(mlp_dim, kernel_initializer=TruncatedNormal(mean=0., stddev=TRUNC_STD), bias_initializer=Zeros()),
+                tfa.layers.GELU(approximate=False),
+                Dense(nhid, kernel_initializer=TruncatedNormal(mean=0., stddev=TRUNC_STD),
+                      bias_initializer=Zeros()),
+            ]
+        )
 
         self.drop = Dropout(dropout)
 
@@ -165,13 +173,21 @@ class _MSA1(tf.keras.layers.Layer):
         return ret
 
 class _MSA2(tf.keras.layers.Layer):
-    def __init__(self, nhid, nhead=10, head_dim=10, dropout=0.1):
+    def __init__(self, nhid, mlp_dim, nhead=10, head_dim=10, dropout=0.1):
         # Multi-head Self Attention Case 2, a broadcastable query for a sequence key and value
         super(_MSA2, self).__init__()
         self.WQ = tf.keras.layers.Conv2D(nhead * head_dim, 1)
         self.WK = tf.keras.layers.Conv2D(nhead * head_dim, 1)
         self.WV = tf.keras.layers.Conv2D(nhead * head_dim, 1)
-        self.WO = tf.keras.layers.Conv2D(nhid, 1)
+        #self.WO = tf.keras.layers.Conv2D(nhid, 1)
+        self.WO = tf.keras.Sequential(
+            [
+                Dense(mlp_dim, kernel_initializer=TruncatedNormal(mean=0., stddev=TRUNC_STD), bias_initializer=Zeros()),
+                tfa.layers.GELU(approximate=False),
+                Dense(nhid, kernel_initializer=TruncatedNormal(mean=0., stddev=TRUNC_STD),
+                      bias_initializer=Zeros()),
+            ]
+        )
         self.drop = Dropout(dropout)
         # print('NUM_HEAD', nhead, 'DIM_HEAD', head_dim)
         self.nhid, self.nhead, self.head_dim, self.unfold_size = nhid, nhead, head_dim, 3
@@ -219,10 +235,10 @@ if __name__ == '__main__':
     iters = 2
     dropout = 0.1
 
-    ring_att = [_MSA1(hidden_size, nhead=num_head, head_dim=head_dim, dropout=0.0)
-                for _ in range(iters)]
-    star_att = [_MSA2(hidden_size, nhead=num_head, head_dim=head_dim, dropout=0.0)
-                for _ in range(iters)]
+    # ring_att = [_MSA1(hidden_size, nhead=num_head, head_dim=head_dim, dropout=0.0)
+    #             for _ in range(iters)]
+    # star_att = [_MSA2(hidden_size, nhead=num_head, head_dim=head_dim, dropout=0.0)
+    #             for _ in range(iters)]
 
     switch_hole = 2
 
@@ -241,7 +257,9 @@ if __name__ == '__main__':
 
     if switch_hole == 2 : #the hole StarTransformer
         encoder = StarTransformer(hidden_size=hidden_size,
+                                       mlp_dim=768,
                                        num_layers=iters,
+                                       num_patches=L,
                                        num_head=num_head,
                                        head_dim=head_dim,
                                        dropout=dropout,)

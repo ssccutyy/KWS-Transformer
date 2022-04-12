@@ -55,7 +55,7 @@ def model_parameters(parser_nn):
       help='Transformer embedding dimension',
   )
   parser_nn.add_argument(
-      '-head_dim',
+      '--head_dim',
       type=int,
       default=64,
       help='Transformer head embedding dimension',
@@ -191,6 +191,7 @@ def model(flags):
 
   if flags.attention_type == 'star':
     star_transformer = StarTransformer(hidden_size=flags.d_model,
+        mlp_dim=flags.mlp_dim,
         num_layers=flags.num_layers,
         num_patches=num_time_windows,
         num_head=flags.heads,
