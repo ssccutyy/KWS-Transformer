@@ -36,27 +36,28 @@ def base_parser():
       '--data_url',
       type=str,
       # pylint: disable=line-too-long
-      default='https://storage.googleapis.com/download.tensorflow.org/data/speech_commands_v0.02.tar.gz',
+      #default='https://storage.googleapis.com/download.tensorflow.org/data/speech_commands_v0.02.tar.gz',
+      default=' ',
       # pylint: enable=line-too-long
       help='Location of speech training data archive on the web.')
   parser.add_argument(
       '--data_dir',
       type=str,
-      default='/tmp/speech_dataset/',
+      default='/home/sudi/kws-Transformer/data2',
       help="""\
       Where to download the speech training data to.
       """)
   parser.add_argument(
       '--lr_schedule',
       type=str,
-      default='linear',
+      default='cosine',
       help="""\
       Learning rate schedule: linear, exp.
       """)
   parser.add_argument(
       '--optimizer',
       type=str,
-      default='adam',
+      default='adamw',
       help='Optimizer: adam, momentum, adamw')
   parser.add_argument(
       '--background_volume',
@@ -68,7 +69,7 @@ def base_parser():
   parser.add_argument(
       '--l2_weight_decay',
       type=float,
-      default=0.0,
+      default=0.1,
       help="""\
       l2 weight decay for layers weights regularization.
       """)
@@ -139,23 +140,23 @@ def base_parser():
   parser.add_argument(
       '--how_many_training_steps',
       type=str,
-      default='10000,10000,10000',
+      default='23438',
       help='How many training loops to run',
   )
   parser.add_argument(
       '--eval_step_interval',
       type=int,
-      default=400,
+      default=72,
       help='How often to evaluate the training results.')
   parser.add_argument(
       '--learning_rate',
       type=str,
-      default='0.0005,0.0001,0.00002',
+      default='0.0005',
       help='How large a learning rate to use when training.')
   parser.add_argument(
       '--batch_size',
       type=int,
-      default=100,
+      default=512,
       help='How many items to train with at once',
   )
   parser.add_argument(
@@ -167,7 +168,7 @@ def base_parser():
   parser.add_argument(
       '--train_dir',
       type=str,
-      default='/tmp/speech_commands_train',
+      default='/home/sudi/kws-Transformer/models_data_v2_12_labels/star_model18',
       help='Directory to write event logs and checkpoint.')
   parser.add_argument(
       '--save_step_interval',
@@ -262,13 +263,13 @@ def base_parser():
   parser.add_argument(
       '--window_size_ms',
       type=float,
-      default=40.0,
+      default=30.0,
       help='How long each spectrogram timeslice is.',
   )
   parser.add_argument(
       '--window_stride_ms',
       type=float,
-      default=20.0,
+      default=10.0,
       help='How far to move in time between spectrogram timeslices.',
   )
   parser.add_argument(
@@ -315,7 +316,7 @@ def base_parser():
   parser.add_argument(
       '--mel_upper_edge_hertz',
       type=float,
-      default=7000.0,
+      default=7600.0,
       help='The desired top edge of the highest frequency band',
   )
   parser.add_argument(
@@ -327,7 +328,7 @@ def base_parser():
   parser.add_argument(
       '--dct_num_features',
       type=int,
-      default=20,
+      default=40,
       help='Number of features left after DCT',
   )
   parser.add_argument(
@@ -354,13 +355,13 @@ def base_parser():
   parser.add_argument(
       '--mel_num_bins',
       type=int,
-      default=40,
+      default=80,
       help='How many bands in the resulting mel spectrum.',
   )
   parser.add_argument(
       '--use_spec_augment',
       type=int,
-      default=0,
+      default=1,
       help='use SpecAugment',
   )
   parser.add_argument(
@@ -372,7 +373,7 @@ def base_parser():
   parser.add_argument(
       '--time_mask_max_size',
       type=int,
-      default=10,
+      default=25,
       help='SpecAugment parameter time_mask_max_size.',
   )
   parser.add_argument(
@@ -384,7 +385,7 @@ def base_parser():
   parser.add_argument(
       '--frequency_mask_max_size',
       type=int,
-      default=5,
+      default=7,
       help='SpecAugment parameter frequency_mask_max_size.',
   )
   parser.add_argument(
@@ -447,7 +448,7 @@ def base_parser():
   parser.add_argument(
       '--pick_deterministically',
       type=int,
-      default=0,
+      default=1,
       help='Pick training data in every epoch deterministically',
   )
   parser.add_argument(
@@ -458,11 +459,11 @@ def base_parser():
   )
   parser.add_argument('--warmup_epochs',
       type=float,
-      default=5,
+      default=10,
       help='Number of warmup epochs for cosine scheduler')
   parser.add_argument('--label_smoothing',
     type=float,
-    default=0.,
+    default=0.1,
     help='Label smoothing epsilon')
   parser.add_argument(
       '--distill_teacher_json',

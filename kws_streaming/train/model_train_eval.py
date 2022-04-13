@@ -129,7 +129,7 @@ import kws_streaming.models.tc_resnet as tc_resnet
 import kws_streaming.models.xception as xception
 import kws_streaming.models.kws_transformer as kws_transformer
 from kws_streaming.train import base_parser
-from kws_streaming.train import train
+from kws_streaming.train import mul_gpu_train as train
 import kws_streaming.train.test as test
 
 FLAGS = None

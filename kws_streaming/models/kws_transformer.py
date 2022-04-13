@@ -45,13 +45,13 @@ def model_parameters(parser_nn):
   parser_nn.add_argument(
       '--num_layers',
       type=int,
-      default=8,
+      default=12,
       help='The number of transformer layers',
   )
   parser_nn.add_argument(
       '--d_model',
       type=int,
-      default=128,
+      default=192,
       help='Transformer embedding dimension',
   )
   parser_nn.add_argument(
@@ -69,19 +69,19 @@ def model_parameters(parser_nn):
   parser_nn.add_argument(
       '--heads',
       type=int,
-      default=4,
+      default=3,
       help='Number of heads in multihead attention',
   )
   parser_nn.add_argument(
       '--dropout1',
       type=float,
-      default=0.1,
+      default=0.,
       help='Percentage of data dropped',
   )
   parser_nn.add_argument(
       '--attention_type',
       type=str,
-      default='time',
+      default='star',
       help='Domain for attention: time, freq, both or patch',
   )
   parser_nn.add_argument(
