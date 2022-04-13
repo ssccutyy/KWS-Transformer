@@ -37,13 +37,13 @@ def base_parser():
       type=str,
       # pylint: disable=line-too-long
       #default='https://storage.googleapis.com/download.tensorflow.org/data/speech_commands_v0.02.tar.gz',
-      default=' ',
+      default='',
       # pylint: enable=line-too-long
       help='Location of speech training data archive on the web.')
   parser.add_argument(
       '--data_dir',
       type=str,
-      default='/home/sudi/kws-Transformer/data2',
+      default='/home/sudi/keyword-transformer-master/data2',
       help="""\
       Where to download the speech training data to.
       """)
@@ -168,7 +168,7 @@ def base_parser():
   parser.add_argument(
       '--train_dir',
       type=str,
-      default='/home/sudi/kws-Transformer/models_data_v2_12_labels/star_model18',
+      default='/home/sudi/keyword-transformer-master/models_data_v2_12_labels/star_model18',
       help='Directory to write event logs and checkpoint.')
   parser.add_argument(
       '--save_step_interval',
