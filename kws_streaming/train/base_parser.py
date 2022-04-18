@@ -168,7 +168,7 @@ def base_parser():
   parser.add_argument(
       '--train_dir',
       type=str,
-      default='/home/sudi/keyword-transformer-master/models_data_v2_12_labels/star_model18',
+      default='/home/sudi/keyword-transformer-master/models_data_v2_12_labels/star_model18/',
       help='Directory to write event logs and checkpoint.')
   parser.add_argument(
       '--save_step_interval',

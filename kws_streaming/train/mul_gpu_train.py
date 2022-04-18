@@ -38,9 +38,10 @@ from kws_streaming.models import utils
 import math
 
 from transformers import AdamWeightDecay
-
+from tensorflow.python.keras.utils.multi_gpu_utils import multi_gpu_model
 #多GPU
 import os
+import time
 tf.disable_eager_execution()
 
 gpu = "0,1"
@@ -84,11 +85,11 @@ def train(flags):
   logging.info(flags)
 
   #多GPU
-  with tf.device('/cpu:0'):  # 使用多GPU时，先在CPU上初始化模型
-    model = models.MODELS[flags.model_name](flags)
+  # with tf.device('/cpu:0'):  # 使用多GPU时，先在CPU上初始化模型
+  #  model = models.MODELS[flags.model_name](flags)
   #多GPU
 
-  #model = models.MODELS[flags.model_name](flags)
+  model = models.MODELS[flags.model_name](flags)
   if flags.distill_teacher_json:
     with open(flags.distill_teacher_json, 'r') as f:
       teacher_flags = json.load(f, object_hook=lambda d: SimpleNamespace(
@@ -139,8 +140,8 @@ def train(flags):
   #model.compile(optimizer=optimizer, loss=loss, loss_weights=loss_weights, metrics=metrics)
 
   #多GPU
-  para_model = tf.keras.utils.multi_gpu_model(model, gpus=gpu_num)  # 在GPU上初始化多GPU模型
-  para_model.compile(optimizer, loss=[loss,loss], metrics=[metrics,metrics])
+  para_model = multi_gpu_model(model, cpu_merge=False, gpus=gpu_num)  # 在GPU上初始化多GPU模型
+  para_model.compile(optimizer, loss=loss, metrics=metrics)
   #多GPU
 
   train_writer = tf.summary.FileWriter(flags.summaries_dir + '/train',
@@ -187,16 +188,19 @@ def train(flags):
 
   # Training loop.
   for training_step in range(start_step, training_steps_max + 1):
+    loop_start = time.time()
     if training_step > 0:
       offset = (training_step -
                 1) * flags.batch_size if flags.pick_deterministically else 0
 
       # Pull the audio samples we'll use for training.
+      pull_data_start = time.time()
       train_fingerprints, train_ground_truth = audio_processor.get_data(
           flags.batch_size, offset, flags, flags.background_frequency,
           flags.background_volume, time_shift_samples, mode,
           flags.resample, flags.volume_resample, sess)
-
+      pull_data_end = time.time()
+      print(pull_data_end-pull_data_start," pre-data")
       if flags.lr_schedule == 'exp':
         learning_rate_value = lr_init * np.exp(-exp_rate * training_step)
       elif flags.lr_schedule == 'linear':
@@ -212,7 +216,7 @@ def train(flags):
       else:
         raise ValueError('Wrong lr_schedule: %s' % flags.lr_schedule)
 
-      tf.keras.backend.set_value(model.optimizer.learning_rate, learning_rate_value)
+      tf.keras.backend.set_value(para_model.optimizer.learning_rate, learning_rate_value)
 
       one_hot_labels = tf.keras.utils.to_categorical(train_ground_truth, num_classes=flags.label_count)
 
@@ -223,7 +227,10 @@ def train(flags):
       #result = model.train_on_batch(train_fingerprints, one_hot_labels)
 
       #多GPU
+      train_start = time.time()
       result = para_model.train_on_batch(train_fingerprints, one_hot_labels)
+      train_end = time.time()
+      print(train_end-train_start,"per batch train")
       #多GPU
 
       if teacher:
@@ -269,8 +276,11 @@ def train(flags):
         #                             one_hot_labels)
 
         #多GPU
+        test_start = time.time()
         result = para_model.test_on_batch(validation_fingerprints,
                                      one_hot_labels)
+        test_end = time.time()
+        print(test_end-test_start," per batch test")
         #多GPU
 
         if teacher:
@@ -303,6 +313,8 @@ def train(flags):
         model.save_weights(flags.train_dir + 'best_weights')
       logging.info('So far the best validation accuracy is %.2f%%',
                    (best_accuracy * 100))
+    loop_end = time.time()
+    print(loop_end-loop_start," per loop")
 
   tf.keras.backend.set_learning_phase(0)
   set_size = audio_processor.set_size('testing')
@@ -318,7 +330,7 @@ def train(flags):
     one_hot_labels = tf.keras.utils.to_categorical(test_ground_truth, num_classes=flags.label_count)
     if teacher:
       one_hot_labels = [ one_hot_labels, one_hot_labels, one_hot_labels ]
-    result = model.test_on_batch(test_fingerprints, one_hot_labels)
+    result = para_model.test_on_batch(test_fingerprints, one_hot_labels)
 
     total_accuracy += result[-1] if teacher else result[1]
     count = count + 1.0

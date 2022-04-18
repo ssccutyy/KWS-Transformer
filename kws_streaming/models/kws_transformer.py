@@ -25,6 +25,7 @@ from kws_streaming.models.transformer_utils import KWSTransformer
 
 from kws_streaming.models.star_transformer_utils import StarTransformer
 
+from kws_streaming.models.pool_transformer_utils import poolTransformer
 
 import tensorflow_addons as tfa
 
@@ -173,6 +174,21 @@ def model(flags):
 
     time_sig = time_transformer(net, training=flags.training)
 
+  if flags.attention_type == 'pool' or flags.attention_type == 'both':
+    pool_transformer = poolTransformer(num_layers=flags.num_layers,
+        num_classes=flags.label_count,
+        d_model=flags.d_model,
+        pool_size=3,
+        mlp_dim=flags.mlp_dim,
+        dropout=flags.dropout1,
+        num_patches=num_time_windows,
+        prenorm=flags.prenorm,
+        distill_token=distill_token,
+        approximate_gelu=flags.approximate_gelu,
+        )
+
+    pool_sig = pool_transformer(net, training=flags.training)
+
   if flags.attention_type == 'freq' or flags.attention_type == 'both':
     freq_transformer = KWSTransformer(num_layers=flags.num_layers,
         num_classes=flags.label_count,
@@ -208,6 +224,8 @@ def model(flags):
 
   if flags.attention_type == 'time':
     net = time_sig
+  elif flags.attention_type == 'pool':
+    net = pool_sig
   elif flags.attention_type == 'freq':
     net = freq_sig
   elif flags.attention_type == 'both':

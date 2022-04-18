@@ -40,6 +40,9 @@ import math
 from transformers import AdamWeightDecay
 
 
+from kws_streaming.models import model_flags
+
+
 def train(flags):
   """Model training."""
 
@@ -302,3 +305,7 @@ def train(flags):
   with open(os.path.join(flags.train_dir, 'accuracy_last.txt'), 'wt') as fd:
     fd.write(str(total_accuracy * 100))
   model.save_weights(flags.train_dir + 'last_weights')
+
+if __name__ == '__main__':
+    flags = model_flags.update_flags(None)
+    train(flags)
