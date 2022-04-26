@@ -234,11 +234,11 @@ class _MSA3(tf.keras.layers.Layer):
         av = tf.reshape(ax_v, [B, nhead, head_dim, aL, L])
 
         q = tf.reshape(q,[B, nhead, head_dim, 1, L])
-        k_unfold = tf.image.extract_patches(images=k, sizes=[1, 1, 3, 1], strides=[1, 1, 1, 1], rates=[1, 1, 1, 1],
+        k_unfold = tf.image.extract_patches(images=k, sizes=[1, 1, unfold_size, 1], strides=[1, 1, 1, 1], rates=[1, 1, 1, 1],
                                                  padding='SAME')
         k1 = tf.transpose(k_unfold, [0, 1, 3, 2])
         k = tf.reshape(k1, [B, nhead, head_dim, unfold_size, L])
-        v_unfold = tf.image.extract_patches(images=v, sizes=[1, 1, 3, 1], strides=[1, 1, 1, 1], rates=[1, 1, 1, 1],
+        v_unfold = tf.image.extract_patches(images=v, sizes=[1, 1, unfold_size, 1], strides=[1, 1, 1, 1], rates=[1, 1, 1, 1],
                                                  padding='SAME')
         v1 = tf.transpose(v_unfold, [0, 1, 3, 2])
         v = tf.reshape(v1, [B, nhead, head_dim, unfold_size, L])

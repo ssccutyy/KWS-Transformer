@@ -25,7 +25,11 @@ from kws_streaming.models.transformer_utils import KWSTransformer
 
 from kws_streaming.models.star_transformer_utils import StarTransformer
 
+from kws_streaming.models.star_former_utils import Star2Transformer
+
 from kws_streaming.models.pool_transformer_utils import poolTransformer
+
+from kws_streaming.models.hybrid import hybridTransformer
 
 import tensorflow_addons as tfa
 
@@ -45,6 +49,12 @@ def model_parameters(parser_nn):
   """Keyword-Transformer model parameters."""
   parser_nn.add_argument(
       '--num_layers',
+      type=int,
+      default=12,
+      help='The number of transformer layers',
+  )
+  parser_nn.add_argument(
+      '--star_num_layers',
       type=int,
       default=12,
       help='The number of transformer layers',
@@ -82,7 +92,7 @@ def model_parameters(parser_nn):
   parser_nn.add_argument(
       '--attention_type',
       type=str,
-      default='star',
+      default='hybrid',
       help='Domain for attention: time, freq, both or patch',
   )
   parser_nn.add_argument(
@@ -174,7 +184,22 @@ def model(flags):
 
     time_sig = time_transformer(net, training=flags.training)
 
-  if flags.attention_type == 'pool' or flags.attention_type == 'both':
+  if flags.attention_type == 'star2':
+    star2_transformer = Star2Transformer(num_layers=flags.num_layers,
+        num_classes=flags.label_count,
+        d_model=flags.d_model,
+        num_heads=flags.heads,
+        mlp_dim=flags.mlp_dim,
+        dropout=flags.dropout1,
+        num_patches=num_time_windows,
+        prenorm=flags.prenorm,
+        distill_token=distill_token,
+        approximate_gelu=flags.approximate_gelu,
+        )
+
+    star2_sig = star2_transformer(net, training=flags.training)
+
+  if flags.attention_type == 'pool':
     pool_transformer = poolTransformer(num_layers=flags.num_layers,
         num_classes=flags.label_count,
         d_model=flags.d_model,
@@ -215,6 +240,18 @@ def model(flags):
         )
     star_sig = star_transformer(net, training=flags.training)
 
+  if flags.attention_type == 'hybrid':
+    hybrid_transformer = hybridTransformer(mlp_dim=flags.mlp_dim,
+        hidden_size=flags.d_model,
+        num_layers_star=flags.star_num_layers,
+        num_layers_standard=flags.num_layers,
+        num_patches=num_time_windows,
+        num_head=flags.heads,
+        head_dim=flags.head_dim,
+        dropout=flags.dropout1,
+        )
+    hybrid_sig = hybrid_transformer(net, training=flags.training)
+
 
   mlp_heads = [ tf.keras.Sequential(
       [
@@ -234,6 +271,10 @@ def model(flags):
     net = patch_sig
   elif flags.attention_type == 'star':
     net = star_sig
+  elif flags.attention_type == 'star2':
+    net = star2_sig
+  elif flags.attention_type == 'hybrid':
+    net = hybrid_sig
   else:
     raise ValueError('Unsupported attention type:%s' % flags.attention_type)
 

@@ -57,7 +57,7 @@ import pickle
 #     return flops.total_float_ops
 
 def data_to_file(image_data, label):
-  with open('512_235data.pkl', 'wb') as f:
+  with open('512_235data35.pkl', 'wb') as f:
     pickle.dump([image_data, label], f)
 
 def file_to_data(pkl_file):
@@ -192,9 +192,9 @@ def train(flags):
     warmup_steps = int((num_train / flags.batch_size) * flags.warmup_epochs)
     first_decay_steps=training_steps_max
 
-  # train_list = []
-  # train_gt_list = []
-  train_list, train_gt_list = file_to_data('512_235data35.pkl')
+  train_list = []
+  train_gt_list = []
+  # train_list, train_gt_list = file_to_data('512_235data.pkl')
   # Training loop.
   for training_step in range(start_step, training_steps_max + 1):
     if training_step > 0:
@@ -202,15 +202,15 @@ def train(flags):
                 1) * flags.batch_size if flags.pick_deterministically else 0
 
       # Pull the audio samples we'll use for training.
-      # train_fingerprints, train_ground_truth = audio_processor.get_data(
-      #     flags.batch_size, offset, flags, flags.background_frequency,
-      #     flags.background_volume, time_shift_samples, mode,
-      #     flags.resample, flags.volume_resample, sess)
-      # train_list.append(train_fingerprints)
-      # train_gt_list.append(train_ground_truth)
+      train_fingerprints, train_ground_truth = audio_processor.get_data(
+          flags.batch_size, offset, flags, flags.background_frequency,
+          flags.background_volume, time_shift_samples, mode,
+          flags.resample, flags.volume_resample, sess)
+      train_list.append(train_fingerprints)
+      train_gt_list.append(train_ground_truth)
       # pull_data_start = time.time()
-      train_fingerprints = train_list[(training_step-1)%235]
-      train_ground_truth = train_gt_list[(training_step-1)%235]
+      # train_fingerprints = train_list[(training_step-1)%235]
+      # train_ground_truth = train_gt_list[(training_step-1)%235]
       # pull_data_end = time.time()
       # print(pull_data_end - pull_data_start, " pre-pull data")
 
@@ -314,7 +314,7 @@ def train(flags):
         model.save_weights(flags.train_dir + 'best_weights')
       logging.info('So far the best validation accuracy is %.2f%%',
                    (best_accuracy * 100))
-  # data_to_file(train_list, train_gt_list)
+  data_to_file(train_list, train_gt_list)
   # print(type(train_list[0]))
   # print(train_list[0].dtype)
   # print(Get_flops(model), "FLOPs1")

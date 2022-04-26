@@ -34,7 +34,7 @@ TRUNC_STD = 0.02
 class pooling(tf.keras.layers.Layer):
     def __init__(self, pool_size=3):
         super(pooling, self).__init__()
-        self.pool = tf.keras.layers.AveragePooling2D(pool_size, strides=1, padding='same')
+        self.pool = tf.keras.layers.AveragePooling2D(pool_size=(pool_size,1), strides=1, padding='same')
 
     def call(self, x):
         x = x[:, :, :, None]
